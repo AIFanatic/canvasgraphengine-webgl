@@ -52,7 +52,7 @@ void main() {
     vec2 uv = gl_PointCoord - 0.5;
 
     if (_shape.x == CIRCLE) {
-        if (length(uv) < _shape.y) {
+        if (length(uv) < 0.5) {
             a = 1.0;
         }
     }

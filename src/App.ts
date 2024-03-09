@@ -66,7 +66,6 @@ export class App {
                 }
             }
 
-            const c = new Circle(0,0,2.0,[1,0,0])
 
             // console.log(ShapeManager.objectCount)
 
@@ -88,6 +87,9 @@ export class App {
                 // console.log(e.clientX, e.clientY, x, y, this.camera.zoom);
                 node.setPosition(x, y);
             });
+
+            // const c = new Circle(0,0,1.0,[1,0,0])
+
 
             // const n = new Node(0, 0);
             // setTimeout(() => {

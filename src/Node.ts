@@ -23,7 +23,7 @@ export class Node {
 
         this.main = new Rectangle(x, y + 0.15, 2, 0.7, [53 / 255, 53 / 255, 53 / 255]);
         this.headerDivisor = new Rectangle(x, y + 0.2, 2, 0.01, [20 / 255, 20 / 255, 20 / 255]);
-        this.headerStatus = new Circle(x - 0.9, y + 0.35, 0.25, [46 / 255, 204 / 255, 112 / 255]);
+        this.headerStatus = new Circle(x - 0.9, y + 0.35, 0.1, [46 / 255, 204 / 255, 112 / 255]);
 
         this.title = new Text(x - 0.15 ,y + 0.35, "SampleNode", 1.2, [145 / 255, 145 / 255, 145 / 255]);
 
