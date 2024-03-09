@@ -1,0 +1,24 @@
+<html>
+    <head>
+        <!-- <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, minimum-scale=1, user-scalable=no"> -->
+
+        <style>
+            html, body {
+                margin: 0;
+            }
+        </style>
+    </head>
+    <body>
+        <canvas id="canvas"></canvas>
+
+        <script type="module">
+            import { App } from "./canvasgraphengine-webgl.js";
+
+            const canvas = document.getElementById("canvas");
+            canvas.width = canvas.parentElement.clientWidth;
+            canvas.height = canvas.parentElement.clientHeight;
+
+            const app = new App(canvas);
+        </script>
+    </body>
+</html>

@@ -1,0 +1,17 @@
+{
+  "name": "canvasgraphengine-webgl",
+  "version": "1.0.0",
+  "main": "index.js",
+  "license": "MIT",
+  "scripts": {
+    "dev": "esbuild src/index.ts --bundle --outfile=dist/canvasgraphengine-webgl.js --loader:.glsl=text --loader:.png=file --target=es2020 --format=esm --watch"
+  },
+  "devDependencies": {
+    "@types/three": "^0.162.0",
+    "esbuild": "^0.20.1"
+  },
+  "dependencies": {
+    "ogl": "^1.0.5",
+    "three": "^0.162.0"
+  }
+}
