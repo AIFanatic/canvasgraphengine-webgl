@@ -9,6 +9,7 @@ import { Rectangle } from "./shapes/Rectangle";
 import { Circle } from "./shapes/Circle";
 import { Text } from "./shapes/Text";
 import { Node } from "./Node";
+import { Slot } from "./widgets/Slot";
 
 export class App {
     private canvas: HTMLCanvasElement;
@@ -33,9 +34,8 @@ export class App {
         this.scene.background = new THREE.Color(0x202020);
         // this.camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 10000);
 
-        const width = window.innerWidth;
-        const height = window.innerHeight;
-        this.camera = new THREE.OrthographicCamera( width / - 2, width / 2, height / 2, height / - 2, 0.1, 10000 );
+        this.camera = new THREE.OrthographicCamera(-0.5, 0.5, 0.5, -0.5, 0.1, 10000);
+        // this.camera = new THREE.OrthographicCamera( width / - 2, width / 2, height / 2, height / - 2, 0.1, 10000 );
         this.scene.add( this.camera );
 
         // setInterval(() => {
@@ -46,7 +46,7 @@ export class App {
         this.camera.position.z = 1;
         this.controls = new OrbitControls(this.camera, this.renderer.domElement);
         this.controls.enableRotate = false;
-        this.controls.minZoom = 100;
+        this.controls.minZoom = 1;
         this.controls.update();
         this.controls.minZoom = 0;
         this.controls.mouseButtons = {
@@ -57,12 +57,24 @@ export class App {
         this.stats = new Stats();
         document.body.appendChild(this.stats.dom);
 
-        ShapeManager.setup(this.scene).then(() => {
+        ShapeManager.setup(this.canvas, this.scene).then(() => {
+
+            document.body.onresize = (ev => {
+                this.renderer.setSize(this.canvas.parentElement.clientWidth, this.canvas.parentElement?.clientHeight)
+                ShapeManager.resize(this.canvas);
+            })
 
             let n = 20;
             for (let x = 0; x < n; x++) {
                 for (let y = 0; y < n; y++) {
-                    const node = new Node(x * 3, y * 3);
+                    const o = 250;
+                    const node = new Node(x * o, y * o);
+
+                    const slot = new Slot(x * o, y * o + 30);
+                    slot.addInput("Test");
+                    slot.addOutput("Out");
+        
+                    node.addWidget(slot);
                 }
             }
 
@@ -70,6 +82,19 @@ export class App {
             // console.log(ShapeManager.objectCount)
 
             const node = new Node(0, 0);
+            const slot = new Slot(0, 30);
+            slot.addInput("Test");
+            slot.addOutput("Out");
+
+            node.addWidget(slot);
+
+            // const r = new Rectangle(0, 0, 500, 500, [1, 0, 0]);
+            // const c = new Circle(100, 100, 125, [1, 1, 0]);
+            // const t = new Text(250, 250, "Hello", 200, [0, 1, 0]);
+
+            // setInterval(() => {
+            //     node.setPosition(1, 0);
+            // }, 2000);
 
             let mouseDown = false;
             document.addEventListener("mousedown", () => {mouseDown = true});
@@ -80,7 +105,7 @@ export class App {
 
                 
                 let x = (e.clientX - canvas.width / 4) / this.camera.zoom;
-                let y = (canvas.height / 4 - e.clientY) / this.camera.zoom;
+                let y = (e.clientY - canvas.height / 4) / this.camera.zoom;
 
                 x += this.camera.position.x;
                 y += this.camera.position.y;

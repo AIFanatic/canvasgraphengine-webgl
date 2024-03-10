@@ -16,6 +16,7 @@ export class ShapeManager {
     private static textHandler = new TextHandler(ShapeManager.textTextureResolution);
 
     private static scene: THREE.Scene;
+    private static shapeMaterial: THREE.ShaderMaterial;
     private static shapeMesh: THREE.Points;
 
     private static MAX_OBJECTS = 1000000;
@@ -30,7 +31,7 @@ export class ShapeManager {
 
     public static objectCount = 0;
 
-    public static async setup(scene: THREE.Scene) {
+    public static async setup(canvas: HTMLCanvasElement, scene: THREE.Scene) {
         return new Promise<void>((resolve, reject) => {
             ShapeManager.scene = scene;
     
@@ -42,26 +43,32 @@ export class ShapeManager {
                 g.setAttribute("shape", ShapeManager.shapeAttribute);
                 g.setAttribute("color", ShapeManager.colorAttribute);
     
-                const m = new THREE.ShaderMaterial({
+                ShapeManager.shapeMaterial = new THREE.ShaderMaterial({
                     vertexShader: ShapeVertex,
                     fragmentShader: ShapeFragment,
                     transparent: true,
                     depthTest: false,
     
-                    // Used for text
                     uniforms: {
+                        canvasWidth: {value: canvas.clientWidth},
+                        canvasHeight: {value: canvas.clientHeight},
                         fontTexture: {value: fontTexture},
                         textTexture: {value: ShapeManager.textHandler.getTexture()},
                         textTextureResolution: {value: ShapeManager.textTextureResolution}
                     }
                 });
     
-                ShapeManager.shapeMesh = new THREE.Points(g, m);
+                ShapeManager.shapeMesh = new THREE.Points(g, ShapeManager.shapeMaterial);
                 ShapeManager.scene.add(ShapeManager.shapeMesh);
 
                 resolve();
             });
         })
+    }
+
+    public static resize(canvas: HTMLCanvasElement) {
+        ShapeManager.shapeMaterial.uniforms.canvasWidth.value = canvas.clientWidth;
+        ShapeManager.shapeMaterial.uniforms.canvasHeight.value = canvas.clientHeight;
     }
 
     public static SetPosition(i: number, x: number, y: number) {

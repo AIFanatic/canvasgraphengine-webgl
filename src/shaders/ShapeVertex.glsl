@@ -2,6 +2,8 @@
 #define RECT 1.0
 #define TEXT 2.0
 
+uniform float canvasWidth;
+uniform float canvasHeight;
 uniform sampler2D textTexture;
 uniform float textTextureResolution;
 
@@ -19,7 +21,13 @@ vec2 indexToCoord(int index, float size) {
 }
 
 void main() {
-    vec4 modelViewPosition = modelViewMatrix * vec4(position, 1.0);
+    vec3 p = position;
+    p.x = p.x / canvasWidth;
+    p.y = -p.y / canvasHeight;
+
+    // p.x -= canvasWidth / 2.0;
+
+    vec4 modelViewPosition = modelViewMatrix * vec4(p, 1.0);
     gl_Position = projectionMatrix * modelViewPosition;
 
     _shape = shape;
@@ -27,7 +35,7 @@ void main() {
 
     float basePointSize;
     if (shape.x == CIRCLE) {
-        basePointSize = shape.y;
+        basePointSize = shape.y * 2.0;
     }
     else if (shape.x == RECT) {
         basePointSize = max(shape.y, shape.z);
@@ -36,10 +44,14 @@ void main() {
         vec2 c = indexToCoord(int(shape.z), textTextureResolution);
         float textLength = texelFetch(textTexture, ivec2(c), 0).r;
 
-        float charSize = shape.y / 10.0;
+        float charSize = shape.y;
         basePointSize = charSize * textLength;
     }
 
-    float pointScale = 1000.0;
+    float pointScale = 1.0;
+    // float distance = length(modelViewPosition.xyz);
+    // gl_PointSize = basePointSize * (pointScale / distance);
+
+    // float depth = -modelViewPosition.z;
     gl_PointSize = basePointSize * pointScale * projectionMatrix[0][0];
 }
