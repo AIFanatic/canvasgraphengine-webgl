@@ -4,11 +4,11 @@ export class Shape {
     public x: number;
     public y: number;
     public shape: SHAPE;
-    public color: number[];
+    public color: number;
     
     protected index: number;
 
-    constructor(x: number, y: number, shape: SHAPE, color: number[]) {
+    constructor(x: number, y: number, shape: SHAPE, color: number) {
         this.x = x;
         this.y = y;
         this.shape = shape;
