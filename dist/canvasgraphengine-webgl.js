@@ -20612,10 +20612,10 @@ Stats.Panel = function(name, fg, bg) {
 var stats_module_default = Stats;
 
 // src/shaders/ShapeVertex.glsl
-var ShapeVertex_default = "#define CIRCLE 0.0\n#define RECT 1.0\n#define TEXT 2.0\n\nuniform float canvasWidth;\nuniform float canvasHeight;\nuniform sampler2D textTexture;\nuniform float textTextureResolution;\n\nattribute vec3 shape;\nvarying vec3 _shape;\n\nattribute vec3 color;\nvarying vec3 _color;\n\nvec2 indexToCoord(int index, float size) {\n    float fIndex = float(index);\n    float x = mod(fIndex, size);\n    float y = floor(fIndex / size);\n    return vec2(x,y);\n}\n\nvoid main() {\n    vec3 p = position;\n    p.x = p.x / canvasWidth;\n    p.y = -p.y / canvasHeight;\n\n    // p.x -= canvasWidth / 2.0;\n\n    vec4 modelViewPosition = modelViewMatrix * vec4(p, 1.0);\n    gl_Position = projectionMatrix * modelViewPosition;\n\n    _shape = shape;\n    _color = color;\n\n    float basePointSize;\n    if (shape.x == CIRCLE) {\n        basePointSize = shape.y * 2.0;\n    }\n    else if (shape.x == RECT) {\n        basePointSize = max(shape.y, shape.z);\n    }\n    else if (shape.x == TEXT) {\n        vec2 c = indexToCoord(int(shape.z), textTextureResolution);\n        float textLength = texelFetch(textTexture, ivec2(c), 0).r;\n\n        float charSize = shape.y;\n        basePointSize = charSize * textLength;\n    }\n\n    float pointScale = 1.0;\n    // float distance = length(modelViewPosition.xyz);\n    // gl_PointSize = basePointSize * (pointScale / distance);\n\n    // float depth = -modelViewPosition.z;\n    gl_PointSize = basePointSize * pointScale * projectionMatrix[0][0];\n}";
+var ShapeVertex_default = "precision highp float;\n\n#define CIRCLE 0.0\n#define RECT 1.0\n#define TEXT 2.0\n#define LINE 3.0\n\nuniform float canvasWidth;\nuniform float canvasHeight;\nuniform sampler2D textTexture;\nuniform float textTextureResolution;\n\nattribute float shape;\nattribute vec4 param;\nattribute float color;\n\nvarying float _shape;\nvarying vec4 _param;\nvarying float _color;\n\nvarying vec2 _point;\n\nvec2 indexToCoord(int index, float size) {\n    float fIndex = float(index);\n    float x = mod(fIndex, size);\n    float y = floor(fIndex / size);\n    return vec2(x,y);\n}\n\nvoid main() {\n    vec3 p = position;\n    _point = p.xy;\n\n    float basePointSize;\n    if (shape == CIRCLE) {\n        basePointSize = param[0] * 2.0;\n    }\n    else if (shape == RECT) {\n        basePointSize = max(param[0], param[1]);\n    }\n    else if (shape == TEXT) {\n        vec2 c = indexToCoord(int(param[1]), textTextureResolution);\n        float textLength = texelFetch(textTexture, ivec2(c), 0).r;\n\n        float charSize = param[0];\n        basePointSize = charSize * textLength;\n    }\n    else if (shape == LINE) {\n        vec2 from = vec2(p.x, p.y);\n        vec2 to = vec2(param[0], param[1]);\n        vec2 dim = abs(to - from);\n\n        p.xy += dim * 0.5;\n\n        if (to.x < from.x) p.x -= dim.x;\n        if (to.y < from.y) p.y -= dim.y;\n\n        basePointSize = max(dim.x, dim.y);\n    }\n\n    p.x = p.x / canvasWidth;\n    p.y = -p.y / canvasHeight;\n    vec4 modelViewPosition = modelViewMatrix * vec4(p, 1.0);\n    gl_Position = projectionMatrix * modelViewPosition;\n\n    _shape = shape;\n    _param = param;\n    _color = color;\n\n    gl_PointSize = basePointSize * projectionMatrix[0][0];\n}";
 
 // src/shaders/ShapeFragment.glsl
-var ShapeFragment_default = "#define CIRCLE 0.0\n#define RECT 1.0\n#define TEXT 2.0\n\nvarying vec3 _shape;\nvarying vec3 _color;\n\nuniform sampler2D fontTexture;\nuniform sampler2D textTexture;\nuniform float textTextureResolution;\n\nvec4 fragColor;\n\nvec4 SampleFontTex(vec2 uv)\n{\n    vec2 fl = floor(uv + 0.5);\n    uv = fl + fract(uv+0.5)-0.5;\n    // Sample the font texture. Make sure to not use mipmaps.\n    // Add a small amount to the distance field to prevent a strange bug on some gpus. Slightly mysterious. :(\n    // -16 is bias to use largest mipmap\n    return texture(fontTexture, (uv+0.5)*(1.0/16.0), -16.0) + vec4(0.0, 0.0, 0.0, 0.000000001);\n}\n\nvoid renderChar(int x,int y, vec2 pos, float size, vec3 color, inout vec4 fragColor, vec2 fragCoord){\n    vec2 p = (fragCoord - pos) / size;\n    // if(abs(p.x) < 0.5 && abs(p.y) < 0.5) {\n        float po = SampleFontTex(p+vec2(float(x),float(y))).a;\n        // if(abs(po-0.5) < 0.005){\n            fragColor.xyz = mix(fragColor.xyz,color,smoothstep(0.505,0.495,po));\n        // }else if(po < 0.5){\n        //     fragColor.xyz = color;\n        // }\n    // }\n}\n\nint coordToIndex(vec2 coord, float size) {\n    return int(coord.y * size + coord.x);\n}\n\nvec2 indexToCoord(int index, float size) {\n    float fIndex = float(index);\n    float x = mod(fIndex, size);\n    float y = floor(fIndex / size);\n    return vec2(x,y);\n}\n\nvoid main() {\n    vec3 col = _color;\n    float a = 0.0;\n\n\n    vec2 uv = gl_PointCoord - 0.5;\n\n    if (_shape.x == CIRCLE) {\n        if (length(uv) < 0.5) {\n            a = 1.0;\n        }\n    }\n    else if (_shape.x == RECT) {\n        a = 0.0;\n        float biggest = max(_shape.y, _shape.z);\n        float smallest = min(_shape.y, _shape.z);\n        float ratio = smallest / biggest;\n        ratio *= 0.5;\n\n        if (_shape.y > _shape.z) {\n            if (uv.y < ratio && uv.y > -ratio) {\n                a = 1.0;\n            }\n        }\n        else {\n            if (uv.x < ratio && uv.x > -ratio) {\n                a = 1.0;\n            }\n        }\n    }\n    else if (_shape.x == TEXT) {\n        a = 0.0;\n\n        // fragColor = vec4(1.0);\n\n        float textTextureSize = textTextureResolution;\n\n        vec2 c = indexToCoord(int(_shape.z), textTextureSize);\n        float textLength = texelFetch(textTexture, ivec2(c), 0).r;\n\n        float ratio = 0.5 / textLength;\n\n        if (uv.y > -ratio && uv.y < ratio) {\n            // a = 1.0;\n            \n            vec2 uv = vec2(gl_PointCoord.x, 1.0 - gl_PointCoord.y);\n            if (mod(textLength, 2.0) < 0.5) {\n                uv.y += ratio;\n            }\n\n            float sizeBase = 35.0;\n\n            vec2 cuv = fract(uv * textLength);\n            vec2 id = floor(cuv * 1000.0);\n\n            vec2 tcoord = vec2(floor(gl_PointCoord.x * textLength), floor(gl_PointCoord.y));\n            int i = coordToIndex(tcoord, textTextureSize);\n            i += int(_shape.z); // Jump to text position. _shape.z = text index\n            i += 1; // Skip first char. First char = text length\n\n            float charIndex = texelFetch(textTexture, ivec2(indexToCoord(i, textTextureSize)), 0).r;\n            float x = mod(charIndex, 16.0);\n            float y = floor(charIndex / 16.0);\n\n            renderChar(int(x),int(y),vec2(0, 0),sizeBase * sizeBase, _color,fragColor,id - 512.0);\n            col = fragColor.xyz;\n\n            if (fragColor.x > 0.0 || fragColor.y > 0.0 || fragColor.z > 0.0) {\n                a = 1.0;\n            }\n            // col.xy = id / 1000.0;\n            // col.xy = cuv;\n        }\n\n\n    }\n\n    gl_FragColor = vec4(col, a);\n}";
+var ShapeFragment_default = 'precision highp float;\n\n#define CIRCLE 0.0\n#define RECT 1.0\n#define TEXT 2.0\n#define LINE 3.0\n\nvarying vec2 _point;\nvarying float _shape;\nvarying vec4 _param;\nvarying float _color;\n\nuniform sampler2D fontTexture;\nuniform sampler2D textTexture;\nuniform float textTextureResolution;\nuniform float canvasWidth;\nuniform float canvasHeight;\n\nvec4 fragColor;\n\nvec4 SampleFontTex(vec2 uv)\n{\n    vec2 fl = floor(uv + 0.5);\n    uv = fl + fract(uv+0.5)-0.5;\n    // Sample the font texture. Make sure to not use mipmaps.\n    // Add a small amount to the distance field to prevent a strange bug on some gpus. Slightly mysterious. :(\n    // -16 is bias to use largest mipmap\n    return texture(fontTexture, (uv+0.5)*(1.0/16.0), -16.0) + vec4(0.0, 0.0, 0.0, 0.000000001);\n}\n\nvoid renderChar(int x,int y, vec2 pos, float size, vec3 color, inout vec4 fragColor, vec2 fragCoord){\n    vec2 p = (fragCoord - pos) / size;\n    // if(abs(p.x) < 0.5 && abs(p.y) < 0.5) {\n        float po = SampleFontTex(p+vec2(float(x),float(y))).a;\n        // if(abs(po-0.5) < 0.005){\n            fragColor.xyz = mix(fragColor.xyz,color,smoothstep(0.505,0.495,po));\n        // }else if(po < 0.5){\n        //     fragColor.xyz = color;\n        // }\n    // }\n}\n\nint coordToIndex(vec2 coord, float size) {\n    return int(coord.y * size + coord.x);\n}\n\nvec2 indexToCoord(int index, float size) {\n    float fIndex = float(index);\n    float x = mod(fIndex, size);\n    float y = floor(fIndex / size);\n    return vec2(x,y);\n}\n\n#define EdgeColor vec4(0.2, 0.2, 0.2, 1.0)\nfloat line(vec2 p, vec2 p0, vec2 p1, float width) {\n    vec2 dir0 = p1 - p0;\n    vec2 dir1 = p - p0;\n    float h = clamp(dot(dir1, dir0)/dot(dir0, dir0), 0.0, 1.0);\n    float d = (length(dir1 - dir0 * h) - width * 0.5);\n    return d;\n}\n\nfloat drawline(vec2 p, vec2 p0, vec2 p1, float width) {\n    float d = line(p, p0, p1, width);\n    float w = fwidth(d) * 1.0;\n    \n    return 1.-smoothstep(-w, w, d);\n}\n\nvec3 unpackColor(float f) {\n    vec3 color;\n    color.b = floor(f / 256.0 / 256.0);\n    color.g = floor((f - color.b * 256.0 * 256.0) / 256.0);\n    color.r = floor(f - color.b * 256.0 * 256.0 - color.g * 256.0);\n    return color / 255.0;\n}\n\nvoid main() {\n    vec3 col = unpackColor(_color);\n    float a = 0.0;\n\n\n    vec2 uv = gl_PointCoord - 0.5;\n\n    if (_shape == CIRCLE) {\n        if (length(uv) < 0.5) {\n            a = 1.0;\n        }\n    }\n    else if (_shape == RECT) {\n        a = 0.0;\n        float width = _param[0];\n        float height = _param[1];\n        float biggest = max(width, height);\n        float smallest = min(width, height);\n        float ratio = smallest / biggest;\n        ratio *= 0.5;\n\n        if (width > height) {\n            if (uv.y < ratio && uv.y > -ratio) {\n                a = 1.0;\n            }\n        }\n        else {\n            if (uv.x < ratio && uv.x > -ratio) {\n                a = 1.0;\n            }\n        }\n    }\n    else if (_shape == LINE) {\n        a = 1.0;\n\n        vec2 linePos = uv;\n        vec2 start = vec2(0, 0);\n        vec2 end = vec2(1.0, 1.0);\n\n        vec2 from = vec2(_point.x, _point.y);\n        vec2 to = vec2(_param[0], _param[1]);\n        vec2 dim = abs(to - from);\n\n        // When a line is (100, 100, 100, 200) (straight down) it gets completely filled.\n        // This is due to dim being "to - from" so when both to.x and from.x are equal it\n        // turns "float ratio = (1.0 - (100.0 / 0.0)) * 0.5;"\n        // Hack it for now\n        dim.x += 0.00000001;\n        float ratio = (1.0 - (dim.y / dim.x)) * 0.5;\n        start.y += ratio;\n        end.y -= ratio;\n\n        if (to.x < from.x) {\n            start.y = 1.0 - start.y;\n            end.y = 1.0 - end.y;\n        }\n\n        if (to.y < from.y) {\n            start.x = 1.0 - start.x;\n            end.x = 1.0 - end.x;\n        }\n        \n        a = drawline(linePos, start - 0.5, end - 0.5, (1.0 / max(dim.x, dim.y)) * _param[2]);\n    }\n    else if (_shape == TEXT) {\n        a = 0.0;\n\n        float textSize = _param[0];\n        float textIndex = _param[1];\n        float textTextureSize = textTextureResolution;\n\n        vec2 c = indexToCoord(int(textIndex), textTextureSize);\n        float textLength = texelFetch(textTexture, ivec2(c), 0).r;\n\n        float ratio = 0.5 / textLength;\n\n        if (uv.y > -ratio && uv.y < ratio) {\n            // a = 1.0;\n            \n            vec2 uv = vec2(gl_PointCoord.x, 1.0 - gl_PointCoord.y);\n            if (mod(textLength, 2.0) < 0.5) {\n                uv.y += ratio;\n            }\n\n            float sizeBase = 35.0;\n\n            vec2 cuv = fract(uv * textLength);\n            vec2 id = floor(cuv * 1000.0);\n\n            vec2 tcoord = vec2(floor(gl_PointCoord.x * textLength), floor(gl_PointCoord.y));\n            int i = coordToIndex(tcoord, textTextureSize);\n            i += int(textIndex); // Jump to text position. textIndex = text index\n            i += 1; // Skip first char. First char = text length\n\n            float charIndex = texelFetch(textTexture, ivec2(indexToCoord(i, textTextureSize)), 0).r;\n            float x = mod(charIndex, 16.0);\n            float y = floor(charIndex / 16.0);\n\n            renderChar(int(x),int(y),vec2(0, 0),sizeBase * sizeBase, col,fragColor,id - 512.0);\n            col = fragColor.xyz;\n\n            if (fragColor.x > 0.0 || fragColor.y > 0.0 || fragColor.z > 0.0) {\n                a = 1.0;\n            }\n            // col.xy = id / 1000.0;\n            // col.xy = cuv;\n        }\n    }\n\n    gl_FragColor = vec4(col, a);\n}';
 
 // src/font.png
 var font_default = "./font-IVSWRBKX.png";
@@ -20674,12 +20674,14 @@ var _ShapeManager = class _ShapeManager {
         g.setDrawRange(0, 0);
         g.setAttribute("position", _ShapeManager.positionAttribute);
         g.setAttribute("shape", _ShapeManager.shapeAttribute);
+        g.setAttribute("param", _ShapeManager.paramAttribute);
         g.setAttribute("color", _ShapeManager.colorAttribute);
         _ShapeManager.shapeMaterial = new ShaderMaterial({
           vertexShader: ShapeVertex_default,
           fragmentShader: ShapeFragment_default,
           transparent: true,
           depthTest: false,
+          depthWrite: false,
           uniforms: {
             canvasWidth: { value: canvas.clientWidth },
             canvasHeight: { value: canvas.clientHeight },
@@ -20701,46 +20703,54 @@ var _ShapeManager = class _ShapeManager {
   static SetPosition(i, x, y) {
     if (i >= _ShapeManager.objectCount)
       throw Error("Cannot set the position of an object lower than the object count");
-    const o = 3 + 3 + 3;
+    const o = 3;
     _ShapeManager.positionAttribute.array[i * o + 0] = x;
     _ShapeManager.positionAttribute.array[i * o + 1] = y;
     _ShapeManager.positionAttribute.array[i * o + 2] = 0;
     _ShapeManager.positionAttribute.needsUpdate = true;
   }
-  static SetShape(i, type, param1, param2) {
+  static SetShape(i, type) {
     if (i >= _ShapeManager.objectCount)
       throw Error("Cannot set the shape of an object lower than the object count");
-    const o = 3 + 3 + 3;
+    const o = 1;
     _ShapeManager.shapeAttribute.array[i * o + 0] = type;
-    _ShapeManager.shapeAttribute.array[i * o + 1] = param1;
-    _ShapeManager.shapeAttribute.array[i * o + 2] = param2;
     _ShapeManager.shapeAttribute.needsUpdate = true;
   }
-  static SetColor(i, r, g, b) {
+  static SetParams(i, param1, param2, param3, param4) {
+    if (i >= _ShapeManager.objectCount)
+      throw Error("Cannot set the shape of an object lower than the object count");
+    const o = 4;
+    _ShapeManager.paramAttribute.array[i * o + 0] = param1;
+    _ShapeManager.paramAttribute.array[i * o + 1] = param2;
+    _ShapeManager.paramAttribute.array[i * o + 2] = param3;
+    _ShapeManager.paramAttribute.array[i * o + 3] = param4;
+    _ShapeManager.paramAttribute.needsUpdate = true;
+  }
+  static SetColor(i, color) {
     if (i >= _ShapeManager.objectCount)
       throw Error("Cannot set the color of an object lower than the object count");
-    const o = 3 + 3 + 3;
-    _ShapeManager.colorAttribute.array[i * o + 0] = r;
-    _ShapeManager.colorAttribute.array[i * o + 1] = g;
-    _ShapeManager.colorAttribute.array[i * o + 2] = b;
+    const o = 1;
+    _ShapeManager.colorAttribute.array[i * o + 0] = color;
     _ShapeManager.colorAttribute.needsUpdate = true;
   }
-  static AddShape(x, y, shape, param1, param2, r, g, b) {
+  static AddShape(x, y, shape, param1, param2, param3, param4, color) {
     const objectIndex = _ShapeManager.objectCount;
     _ShapeManager.objectCount += 1;
     _ShapeManager.SetPosition(objectIndex, x, y);
-    _ShapeManager.SetShape(objectIndex, shape, param1, param2);
-    _ShapeManager.SetColor(objectIndex, r, g, b);
-    _ShapeManager.shapeMesh.geometry.setDrawRange(0, _ShapeManager.objectCount * 3);
+    _ShapeManager.SetShape(objectIndex, shape);
+    _ShapeManager.SetParams(objectIndex, param1, param2, param3, param4);
+    _ShapeManager.SetColor(objectIndex, color);
+    _ShapeManager.shapeMesh.geometry.setDrawRange(0, _ShapeManager.objectCount);
     return objectIndex;
   }
-  static AddText(x, y, text, fontSize, r, g, b) {
+  static AddText(x, y, text, fontSize, color) {
     const objectIndex = _ShapeManager.objectCount;
     _ShapeManager.objectCount += 1;
     const textIndex = _ShapeManager.textHandler.addText(text);
     _ShapeManager.SetPosition(objectIndex, x, y);
-    _ShapeManager.SetShape(objectIndex, 2 /* TEXT */, fontSize, textIndex);
-    _ShapeManager.SetColor(objectIndex, r, g, b);
+    _ShapeManager.SetShape(objectIndex, 2 /* TEXT */);
+    _ShapeManager.SetParams(objectIndex, fontSize, textIndex, 0, 0);
+    _ShapeManager.SetColor(objectIndex, color);
     _ShapeManager.shapeMesh.geometry.setDrawRange(0, _ShapeManager.objectCount * 3);
     return objectIndex;
   }
@@ -20752,11 +20762,13 @@ __publicField(_ShapeManager, "shapeMaterial");
 __publicField(_ShapeManager, "shapeMesh");
 __publicField(_ShapeManager, "MAX_OBJECTS", 1e6);
 __publicField(_ShapeManager, "positions", new Float32Array(_ShapeManager.MAX_OBJECTS * 3));
-__publicField(_ShapeManager, "shapes", new Float32Array(_ShapeManager.MAX_OBJECTS * 3));
-__publicField(_ShapeManager, "colors", new Float32Array(_ShapeManager.MAX_OBJECTS * 3));
+__publicField(_ShapeManager, "shapes", new Float32Array(_ShapeManager.MAX_OBJECTS * 1));
+__publicField(_ShapeManager, "params", new Float32Array(_ShapeManager.MAX_OBJECTS * 4));
+__publicField(_ShapeManager, "colors", new Float32Array(_ShapeManager.MAX_OBJECTS * 1));
 __publicField(_ShapeManager, "positionAttribute", new Float32BufferAttribute(_ShapeManager.positions, 3));
-__publicField(_ShapeManager, "shapeAttribute", new Float32BufferAttribute(_ShapeManager.shapes, 3));
-__publicField(_ShapeManager, "colorAttribute", new Float32BufferAttribute(_ShapeManager.colors, 3));
+__publicField(_ShapeManager, "shapeAttribute", new Float32BufferAttribute(_ShapeManager.shapes, 1));
+__publicField(_ShapeManager, "paramAttribute", new Float32BufferAttribute(_ShapeManager.params, 4));
+__publicField(_ShapeManager, "colorAttribute", new Float32BufferAttribute(_ShapeManager.colors, 1));
 __publicField(_ShapeManager, "objectCount", 0);
 var ShapeManager = _ShapeManager;
 
@@ -20764,6 +20776,15 @@ var ShapeManager = _ShapeManager;
 var Color2 = class {
   static RGB(r, g, b) {
     return [r / 255, g / 255, b / 255];
+  }
+  // public static HEX(r: number, g: number, b: number): number {
+  //     const rp = Math.max(0, Math.min(255, r));
+  //     const gp = Math.max(0, Math.min(255, g));
+  //     const bp = Math.max(0, Math.min(255, b));
+  //     return (rp << 16) | (gp << 8) | bp;
+  // }
+  static HEX(r, g, b) {
+    return r + g * 256 + b * 256 * 256;
   }
 };
 
@@ -20794,7 +20815,7 @@ var Shape = class {
 var Circle = class extends Shape {
   constructor(x, y, r, c) {
     super(x, y, 0 /* CIRCLE */, c);
-    this.index = ShapeManager.AddShape(x, y, 0 /* CIRCLE */, r, 0, c[0], c[1], c[2]);
+    this.index = ShapeManager.AddShape(x, y, 0 /* CIRCLE */, r, 0, 0, 0, c);
   }
 };
 
@@ -20802,7 +20823,7 @@ var Circle = class extends Shape {
 var Rectangle = class extends Shape {
   constructor(x, y, w, h, c) {
     super(x, y, 1 /* RECT */, c);
-    this.index = ShapeManager.AddShape(x, y, 1 /* RECT */, w, h, c[0], c[1], c[2]);
+    this.index = ShapeManager.AddShape(x, y, 1 /* RECT */, w, h, 0, 0, c);
   }
 };
 
@@ -20810,7 +20831,7 @@ var Rectangle = class extends Shape {
 var Text = class extends Shape {
   constructor(x, y, text, fontSize, c) {
     super(x, y, 2 /* TEXT */, c);
-    this.index = ShapeManager.AddText(x, y, text, fontSize, c[0], c[1], c[2]);
+    this.index = ShapeManager.AddText(x, y, text, fontSize, c);
   }
 };
 
@@ -20849,10 +20870,10 @@ var Header = class extends Widget {
     __publicField(this, "headerDivisor");
     __publicField(this, "headerStatus");
     __publicField(this, "title");
-    this.rect = new Rectangle(x, y, 200, 30, Color2.RGB(53, 53, 53));
-    this.headerDivisor = new Rectangle(x, y + 15, 200, 1, Color2.RGB(20, 20, 20));
-    this.headerStatus = new Circle(x - 90, y, 5, Color2.RGB(46, 204, 112));
-    this.title = new Text(x - 30, y, title, 10, Color2.RGB(145, 145, 145));
+    this.rect = new Rectangle(x, y, 200, 30, Color2.HEX(53, 53, 53));
+    this.headerDivisor = new Rectangle(x, y + 15, 200, 1, Color2.HEX(20, 20, 20));
+    this.headerStatus = new Circle(x - 90, y, 5, Color2.HEX(46, 204, 112));
+    this.title = new Text(x - 30, y, title, 10, Color2.HEX(145, 145, 145));
     this.addShape(this.rect);
     this.addShape(this.headerDivisor);
     this.addShape(this.headerStatus);
@@ -20890,20 +20911,20 @@ var Slot = class extends Widget {
   constructor(x, y) {
     super(x, y);
     __publicField(this, "rect");
-    this.rect = new Rectangle(x, y, 200, 30, Color2.RGB(53, 53, 53));
+    this.rect = new Rectangle(x, y, 200, 30, Color2.HEX(53, 53, 53));
     this.addShape(this.rect);
   }
   addInput(label) {
     const labelLength = label.length / 2 / 10;
-    const inputStatus = new Circle(this.x - 90, this.y, 4, Color2.RGB(70, 70, 70));
-    const inputLabel = new Text(this.x + labelLength - 60, this.y, label, 10, Color2.RGB(145, 145, 145));
+    const inputStatus = new Circle(this.x - 90, this.y, 4, Color2.HEX(70, 70, 70));
+    const inputLabel = new Text(this.x + labelLength - 60, this.y, label, 10, Color2.HEX(145, 145, 145));
     this.addShape(inputStatus);
     this.addShape(inputLabel);
   }
   addOutput(label) {
     const labelLength = label.length / 2;
-    const outputStatus = new Circle(this.x + 90, this.y, 4, Color2.RGB(70, 70, 70));
-    const outputLabel = new Text(this.x - labelLength + 65, this.y, label, 10, Color2.RGB(145, 145, 145));
+    const outputStatus = new Circle(this.x + 90, this.y, 4, Color2.HEX(70, 70, 70));
+    const outputLabel = new Text(this.x - labelLength + 65, this.y, label, 10, Color2.HEX(145, 145, 145));
     this.addShape(outputStatus);
     this.addShape(outputLabel);
   }
@@ -20948,36 +20969,17 @@ var App = class {
       for (let x = 0; x < n; x++) {
         for (let y = 0; y < n; y++) {
           const o = 250;
-          const node2 = new Node(x * o, y * o);
-          const slot2 = new Slot(x * o, y * o + 30);
-          slot2.addInput("Test");
-          slot2.addOutput("Out");
-          node2.addWidget(slot2);
+          const node = new Node(x * o, y * o);
+          const slot = new Slot(x * o, y * o + 30);
+          slot.addInput("Input");
+          slot.addOutput("Out");
+          node.addWidget(slot);
+          makeLine(x * o + 100, y * o + 30, x * o + 100 + 50, y * o + 30, 1);
         }
       }
-      const node = new Node(0, 0);
-      const slot = new Slot(0, 30);
-      slot.addInput("Test");
-      slot.addOutput("Out");
-      node.addWidget(slot);
-      let mouseDown = false;
-      document.addEventListener("mousedown", () => {
-        mouseDown = true;
-      });
-      document.addEventListener("mouseup", () => {
-        mouseDown = false;
-      });
-      document.addEventListener("mousemove", (e) => {
-        if (!mouseDown)
-          return;
-        if (e.buttons !== 2)
-          return;
-        let x = (e.clientX - canvas.width / 4) / this.camera.zoom;
-        let y = (e.clientY - canvas.height / 4) / this.camera.zoom;
-        x += this.camera.position.x;
-        y += this.camera.position.y;
-        node.setPosition(x, y);
-      });
+      function makeLine(x0, y0, x1, y1, lineWidth) {
+        ShapeManager.AddShape(x0, y0, 3 /* LINE */, x1, y1, lineWidth, 0, 16711680);
+      }
       this.render();
     });
   }
