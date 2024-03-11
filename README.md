@@ -1,6 +1,8 @@
 # CanvasGraphEngine-WEBGL
 ![](./assets/screenshot.gif "./assets/screenshot.gif")
 
+[DEMO](https://aifanatic.github.io/canvasgraphengine-webgl/dist/index.html)
+
 This project is intended to be the same as CanvasGraphEngine but done in webgl.
 <br />
 The performance increase is noticeable.
